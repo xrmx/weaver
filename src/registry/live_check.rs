@@ -95,7 +95,7 @@ pub struct RegistryLiveCheckArgs {
     #[arg(long, default_value = "json")]
     input_format: InputFormat,
 
-    /// Format used to render the report. Predefined formats are: ansi, json
+    /// Format used to render the report. Predefined formats are: ansi, json, ndjson
     #[arg(long, default_value = "ansi")]
     format: String,
 
