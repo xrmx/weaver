@@ -134,3 +134,84 @@ fn run_emit_with_live_check_test(use_v2: bool) {
 
     // The temporary directory will be automatically cleaned up when temp_dir goes out of scope
 }
+
+/// This test verifies the ndjson format output for live check command.
+#[test]
+fn test_live_check_ndjson_format() {
+    use assert_cmd::Command;
+
+    // Create a temporary directory for output
+    let temp_dir = tempdir().expect("Failed to create temporary directory");
+    let temp_dir_path = temp_dir
+        .path()
+        .to_str()
+        .expect("Failed to convert temp directory path to string");
+
+    // Run live check with ndjson format and file input
+    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("weaver"));
+    let output = cmd
+        .arg("registry")
+        .arg("live-check")
+        .arg("-r")
+        .arg("crates/weaver_emit/data")
+        .arg("--format")
+        .arg("ndjson")
+        .arg("--input-source")
+        .arg("crates/weaver_live_check/data/span.json")
+        .arg("--input-format")
+        .arg("json")
+        .arg("--no-stream")
+        .arg("--output")
+        .arg(temp_dir_path)
+        .arg("--quiet")
+        .timeout(Duration::from_secs(30))
+        .output()
+        .expect("Failed to execute live check command");
+
+    // Check that command was successful (exit code 0) or had violations (exit code 1)
+    // Exit code 1 is expected when there are policy violations
+    if !output.status.success() && output.status.code() != Some(1) {
+        eprintln!("STDOUT: {}", String::from_utf8_lossy(&output.stdout));
+        eprintln!("STDERR: {}", String::from_utf8_lossy(&output.stderr));
+    }
+    assert!(
+        output.status.success() || output.status.code() == Some(1),
+        "Live check command failed with unexpected exit code: {:?}",
+        output.status.code()
+    );
+
+    // Read the ndjson output file
+    let ndjson_output = fs::read_to_string(format!("{temp_dir_path}/live_check.ndjson"))
+        .expect("Failed to read live_check.ndjson from output directory");
+
+    // Verify the output contains valid ndjson (each line is valid JSON)
+    let lines: Vec<&str> = ndjson_output.trim().lines().collect();
+    assert!(
+        lines.len() >= 2,
+        "Expected at least 2 lines (samples + statistics), got {}",
+        lines.len()
+    );
+
+    // Parse each line as JSON to verify it's valid
+    for (i, line) in lines.iter().enumerate() {
+        let parsed: serde_json::Value = serde_json::from_str(line)
+            .unwrap_or_else(|e| panic!("Failed to parse line {} as JSON: {}", i + 1, e));
+
+        // The last line should be the statistics object
+        if i == lines.len() - 1 {
+            assert!(
+                parsed.get("total_entities").is_some(),
+                "Last line should contain statistics with total_entities field"
+            );
+            let total_entities = parsed["total_entities"]
+                .as_u64()
+                .expect("total_entities should be a number");
+            assert!(
+                total_entities > 0,
+                "total_entities should be greater than 0"
+            );
+        }
+    }
+
+    // The temporary directory will be automatically cleaned up when temp_dir goes out of scope
+}
