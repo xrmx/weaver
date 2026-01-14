@@ -1,0 +1,14 @@
+{% if ctx.samples is defined %}
+{# This is a LiveCheckReport object - output each sample as a separate JSON line #}
+{% for sample in ctx.samples %}
+{{ sample | tojson }}
+{% endfor %}
+{# Output statistics as the final JSON line #}
+{{ ctx.statistics | tojson }}
+{%- elif ctx.total_entities is defined -%}
+{# This is a LiveCheckStatistics object - output as a single JSON line #}
+{{ ctx | tojson }}
+{%- else -%}
+{# This is a single sample - output as a single JSON line #}
+{{ ctx | tojson }}
+{%- endif -%}
